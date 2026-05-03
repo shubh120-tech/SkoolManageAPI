@@ -101,59 +101,21 @@ builder.Services.AddScoped<SchoolManagement.Application.Academic.Services.IAcade
 builder.Services.AddScoped<SchoolManagement.Application.Academic.Services.IAcademicSessionService, AcademicSessionService>();
 builder.Services.AddScoped<SubscriptionLifecycleJob>();
 
-var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(defaultConnection))
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+if (!string.IsNullOrEmpty(databaseUrl))
 {
-    defaultConnection = builder.Configuration["ConnectionStrings:DefaultConnection"];
+    var uri = new Uri(databaseUrl);
+    var userInfo = uri.UserInfo.Split(':');
+    var connectionString = $"Host={uri.Host};Port={uri.Port};Database={uri.AbsolutePath.TrimStart('/')};Username={userInfo[0]};Password={userInfo[1]};SSL Mode=Require;Trust Server Certificate=true";
+    
+    // Inject it so GetConnectionString("DefaultConnection") works as normal
+    builder.Configuration["ConnectionStrings:DefaultConnection"] = connectionString;
 }
 
-if (string.IsNullOrWhiteSpace(defaultConnection))
-{
-    // Azure App Service maps the "Connection strings" blade to typed env vars; names differ by DB type and OS.
-    foreach (var envKey in new[]
-             {
-                 "CUSTOMCONNSTR_DefaultConnection",
-                 "POSTGRESQLCONNSTR_DefaultConnection",
-                 "SQLCONNSTR_DefaultConnection",
-                 "SQLAZURECONNSTR_DefaultConnection",
-                 "ConnectionStrings__DefaultConnection"
-             })
-    {
-        var v = Environment.GetEnvironmentVariable(envKey);
-        if (!string.IsNullOrWhiteSpace(v))
-        {
-            defaultConnection = v;
-            break;
-        }
-    }
-}
+// 2. Read it once — used by both DbConnectionFactory and Hangfire
+var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Database connection string is missing at runtime.");
 
-if (string.IsNullOrWhiteSpace(defaultConnection))
-{
-    foreach (System.Collections.DictionaryEntry e in Environment.GetEnvironmentVariables())
-    {
-        var key = e.Key?.ToString() ?? "";
-        if (!key.Contains("CONNSTR", StringComparison.OrdinalIgnoreCase))
-            continue;
-        if (!key.Contains("DefaultConnection", StringComparison.OrdinalIgnoreCase))
-            continue;
-        if (e.Value is string s && !string.IsNullOrWhiteSpace(s))
-        {
-            defaultConnection = s;
-            break;
-        }
-    }
-}
-
-if (string.IsNullOrWhiteSpace(defaultConnection))
-{
-    throw new InvalidOperationException(
-        "Database connection string is missing at runtime. Fix in Azure Portal → your Web App (correct app + production slot) → Configuration → Save: " +
-        "(1) Application settings: name ConnectionStrings__DefaultConnection (two underscores), value = full Npgsql connection string; OR " +
-        "(2) Connection strings: name DefaultConnection, type PostgreSQL or Custom. " +
-        "If using Key Vault reference, ensure access policy/role and that the secret resolves (empty = failed). " +
-        "Redeploy does not create this; you must set it in the portal for this app.");
-}
 builder.Services.AddHangfire(config =>
 {
     config.UsePostgreSqlStorage(options =>
