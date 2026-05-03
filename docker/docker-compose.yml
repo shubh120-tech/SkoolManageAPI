@@ -1,0 +1,46 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    container_name: schoolmanagement-db
+    restart: always
+    environment:
+      POSTGRES_DB: school_management
+      POSTGRES_USER: school_user
+      POSTGRES_PASSWORD: StrongPassword123!
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ../db/functions_and_procs_auth.sql:/docker-entrypoint-initdb.d/02-functions_and_procs_auth.sql
+      - ../db/stored_procedures_school.sql:/docker-entrypoint-initdb.d/03-stored_procedures_school.sql
+      - ../db/stored_procedures_academic.sql:/docker-entrypoint-initdb.d/04-stored_procedures_academic.sql
+      - ../db/stored_procedures_academic_sessions.sql:/docker-entrypoint-initdb.d/05-stored_procedures_academic_sessions.sql
+      - ../db/stored_procedures_students.sql:/docker-entrypoint-initdb.d/06-stored_procedures_students.sql
+      - ../db/stored_procedures_staff.sql:/docker-entrypoint-initdb.d/07-stored_procedures_staff.sql
+      - ../db/stored_procedures_attendance.sql:/docker-entrypoint-initdb.d/08-stored_procedures_attendance.sql
+      - ../db/stored_procedures_fees.sql:/docker-entrypoint-initdb.d/09-stored_procedures_fees.sql
+      - ../db/stored_procedures_payroll.sql:/docker-entrypoint-initdb.d/10-stored_procedures_payroll.sql
+      - ../db/stored_procedures_timetable.sql:/docker-entrypoint-initdb.d/11-stored_procedures_timetable.sql
+      - ../db/stored_procedures_communication.sql:/docker-entrypoint-initdb.d/12-stored_procedures_communication.sql
+      - ../db/functions_reporting.sql:/docker-entrypoint-initdb.d/13-functions_reporting.sql
+
+  api:
+    build:
+      context: ..
+      dockerfile: src/docker/Dockerfile
+    container_name: schoolmanagement-api
+    restart: always
+    depends_on:
+      - db
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=school_management;Username=school_user;Password=StrongPassword123!"
+    ports:
+      - "5000:80"
+
+volumes:
+  pgdata:
+
